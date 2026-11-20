@@ -263,3 +263,22 @@ test("a forbidden word is looked for in what players read, never in ids or event
   ], { forbidden: ["stall"] });
   assert.deepEqual(out.rejected.map((r) => r.id), ["r2"], "only the text that names it");
 });
+
+test("a piece's found line and container choice: a bad one is dropped, never the piece", () => {
+  const langs = ["en", "pt-br"];
+  const piece = (id, extra) => ({ id, type: "write_note", story_id: id, item: "ZTales.PhotoYellow",
+    text: { en: "Back of the photo.", "pt-br": "Verso da foto." }, title: { en: "Photo", "pt-br": "Foto" },
+    target: { building: "b_1_1" }, ...extra });
+  const g = gateBatch([
+    piece("a", { found: { en: "Who throws away a photo like this?", "pt-br": "Quem joga fora uma foto assim?" }, target: { building: "b_1_1", container_pref: ["bin"] } }),
+    piece("b", { found: { en: "Only English." }, target: { building: "b_1_1", container_pref: "desk" } }),
+    piece("c", { found: { en: "x".repeat(91), "pt-br": "ok" } }),
+  ], { languages: langs });
+  assert.deepEqual(g.accepted.map((d) => d.id), ["a", "b", "c"]);
+  assert.deepEqual(g.accepted[0].target.container_pref, ["bin"]);
+  assert.ok(g.accepted[0].found, "a complete found line stays");
+  assert.equal(g.accepted[1].found, undefined);
+  assert.equal(g.accepted[1].target.container_pref, undefined);
+  assert.equal(g.accepted[2].found, undefined, "longer than 90");
+  assert.equal(g.notes.filter((n) => /found line dropped|container_pref dropped/.test(n)).length, 3);
+});

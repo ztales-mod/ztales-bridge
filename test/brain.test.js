@@ -90,7 +90,9 @@ test("the fixed instructions carry the rules, then the lore digest", async () =>
   // 2026-10-28: the watch task's pull toward the chapter's real town fits by dropping the retired
   // "written ahead" note; still under 58k
   // 59k: the hint's pull per band and the terrain rule (2026-11-13), ~200 cached tokens
-  assert.ok(sys.length < 59000, `fixed prompt stays compact (${sys.length} chars)`);
+  // 59.5k: where a piece rests and the finder's `found` line (2026-11-19), ~60 cached tokens
+  // 60.5k: `left_behind` and the page's `thread` (2026-11-19), ~250 cached tokens
+  assert.ok(sys.length < 60500, `fixed prompt stays compact (${sys.length} chars)`);
 });
 
 test("an answer cut at the token limit says so, with what it cost", async () => {

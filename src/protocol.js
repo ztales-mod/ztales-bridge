@@ -47,6 +47,9 @@ export const CHARGE_STATS = new Set(["panic", "stress", "unhappiness", "fatigue"
 export const ECHO_MAX_CHARS = 700;
 
 /** Fields a player reads. Each may be a string or { lang: text } (docs/05, each player's language). */
+/** A piece's found line, shown over the finder's head: a thought, not a paragraph. */
+export const FOUND_MAX_CHARS = 90;
+
 export const TEXT_FIELDS = ["text", "title", "prompt", "epilogue", "server_line", "intuition"];
 
 /** Outbox files the bridge consumes and deletes. */

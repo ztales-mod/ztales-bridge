@@ -121,6 +121,9 @@ function seed(ctx) {
       echo: T("Someone found a photo of a woman at a radio, they say. I keep hearing a number I never learned.",
         "Dizem que alguém achou a foto de uma mulher num rádio. Fico ouvindo um número que nunca aprendi."),
     },
+    // who opens the photo's drawer and leaves it gets this later (src/threads.js)
+    left_behind: T("That drawer keeps opening in my head. I shut it on something that was looking back.",
+      "Aquela gaveta não para de abrir na minha cabeça. Fechei ela em cima de algo que olhava de volta."),
     hints: { n1: { full: { text: T(`Someone kept a photo in the ${a.rooms?.[0] || "shop"}. Seven o'clock.`, `Alguém guardou uma foto no(a) ${a.rooms?.[0] || "loja"}. Sete horas.`) },
       echo: { text: "88.6" } },
     openers: { default: [T("Before all this, I was the kind of person who", "Antes de tudo isso, eu era o tipo de pessoa que"),

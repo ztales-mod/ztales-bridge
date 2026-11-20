@@ -16,6 +16,7 @@ import { cleanActive, updateBlocks, dueBlocks, blockHours, nearLooks } from "./w
 import { scoreMin } from "./contribution.js";
 import { updateCarriers, isStoryPiece, carrierNote } from "./carrier.js";
 import { proximityDirectives } from "./proximity.js";
+import { updateLeftOpen, dueLeftBehind } from "./threads.js";
 
 export const IDLE_POLL_SEC = 600;      // nobody online: look every 10 minutes
 export const BUSY_POLL_SEC = 50;       // somebody online: every cron minute
@@ -180,6 +181,21 @@ export async function tick({ t, store, nowSec, decide = null, version = "0", tzO
       if (e?.type === "former_self_killed") report.notes.push(`${e.by || "someone"} put down the risen carrier of ${(e.story_ids || []).join(", ")}`);
       if (e?.type === "carrier_body_gone") report.notes.push(`the body that carried ${(e.story_ids || []).join(", ")} is gone: put-back allowed`);
     }
+  }
+
+  // opened the container holding the open chapter's piece and left it (src/threads.js): one
+  // diary line later, unless somebody picked it up in the meantime
+  if (state.node && (fresh.length || Object.keys(state.left_open || {}).length)) {
+    const nodePieces = new Set((state.pieces_by_node || []).find((n) => n.node === state.node)?.ids || []);
+    const open = updateLeftOpen(state.left_open, fresh, nodePieces, state.node, nowSec);
+    const lb = dueLeftBehind({ open, sent: state.left_behind_sent, season: state.season || "", node: state.node,
+      text: state.left_behind_texts?.[state.node] || null, languages: state.languages || patch.languages || ["en"], nowSec });
+    if (lb.directives.length) {
+      await store.enqueue(lb.directives);
+      patch.left_behind_sent = lb.sent;
+      report.notes.push(`left behind: ${lb.directives.map((d) => d.player).join(", ")} opened the piece's container and went without it`);
+    }
+    if (JSON.stringify(lb.open) !== JSON.stringify(state.left_open || {})) patch.left_open = lb.open;
   }
 
   // proximity rings written before their piece had a place (src/story.js ringsLater): drawn

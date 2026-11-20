@@ -939,9 +939,11 @@ test("a set_node outside the axis is set to the next chapter, dropped on the las
 // docs/13 item 2: the chapter's end reaches everyone, with no AI call
 test("a chapter's end: the finder's page, a record for those who took part, an echo for the rest, the mark for all", async () => {
   const both = (x) => ({ en: x, "pt-br": x });
-  const answer = seedAnswer({ chapter_end: { record: both("I was there when it was found."), echo: both("They say it was found.") } });
+  const answer = seedAnswer({ chapter_end: { record: both("I was there when it was found."), echo: both("They say it was found.") },
+    left_behind: both("That room keeps coming back to me.") });
   const { t, store } = await seedSetup([answer]);
   assert.deepEqual((await store.getState()).chapter_end_texts.n1.record, both("I was there when it was found."), "kept with the stage");
+  assert.deepEqual((await store.getState()).left_behind_texts.n1, both("That room keeps coming back to me."), "kept with the stage too");
   const quiet = fakeAsk([finalStageAnswer()]);
   const decide = makeDecide({ ask: quiet.ask, system: "S", bibleKey: KEY });
   // dan was seen earlier in the story, doing nothing in this chapter
@@ -1240,6 +1242,12 @@ test("the finder's page is scored in the stage call it waited for: a 3 opens an 
     assert.equal(s.extras_total, 1, "the season's tally (the Final Tale) counts it");
     assert.equal(s.extra_chapters[0].way_back, "n3");
     assert.deepEqual(s.pages, [], "scored: off the list");
+    // a strong page is the thread the next calls carry (src/threads.js)
+    assert.equal(s.thread.player, "ana");
+    assert.equal(s.thread.chapter, "n2");
+    assert.equal(s.thread.set_in, "n3");
+    assert.match(s.thread.text, /counting down/);
+    assert.match(r.notes.join(" "), /thread: ana's page of n2 \(3\) is carried on/);
     assert.ok(sent.some((d) => d.id === "s1_fin_filled"), "the final stage carries the urn");
   } finally { delete NEXT.n2; }
 });
@@ -1532,4 +1540,26 @@ test("a piece carried by a story zombie has its rings around that zombie's build
   const far = sent.find((d) => d.id === "s1_prox_n2_far");
   assert.ok(far, "the rings are drawn");
   assert.equal(far.x, 11804 - 120);
+});
+
+test("a thread set in one chapter reaches the next stage call, then is dropped once carried (src/threads.js)", async () => {
+  NEXT.n2 = "n3";
+  try {
+    const files = catalogFiles();
+    files["catalog/cell-39_32.json"] = MORE_PLACES;
+    const t = new MemoryTransport(files);
+    const store = new MemoryStore();
+    const ai = askByTask({ seed: seedAnswer({ bible: BIBLE3 }), "stage:n2": stage2of3() });
+    const decide = makeDecide({ ask: ai.ask, system: "S", bibleKey: KEY });
+    await tick({ t, store, nowSec: T0, decide });
+    const thread = { player: "ana", chapter: "n1", score: 3, text: "The dog's name was on the gas station's board.", set_in: "n1", season: "s1" };
+    await store.setState({ thread });
+    t.files.set("outbox/seq.json", JSON.stringify({ seq: 2, players_online: 2 }));
+    t.files.set("outbox/events-2-00001.json", JSON.stringify({ events: [{ type: "node_changed", from: "n1", to: "n2" }] }));
+    await tick({ t, store, nowSec: T0 + 60, decide });
+    const call = ai.calls.find((c) => c.task === "stage" && c.stage?.id === "n2");
+    assert.ok(call, ai.calls.map((c) => c.task).join(","));
+    assert.deepEqual(call.state.thread, { player: "ana", chapter: "n1", text: thread.text }, "no score, no bookkeeping");
+    assert.equal((await store.getState()).thread, null, "carried by n2's stage: dropped");
+  } finally { delete NEXT.n2; }
 });

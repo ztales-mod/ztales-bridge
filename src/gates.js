@@ -13,7 +13,7 @@
  *                        player reads must be { lang: text } holding all of them
  *   ctx.placeRule        (target) -> reason | null; the final node's rule (catalog.finalPlaceRule)
  */
-import { DIRECTIVE_TYPES, REACTION_EVENTS, FOCAL_TYPES, FOCAL_MAX_RADIUS, CHAT_MAX_CHARS, ECHO_MAX_CHARS, TEXT_FIELDS, DELAY_MAX_SEC } from "./protocol.js";
+import { DIRECTIVE_TYPES, REACTION_EVENTS, FOCAL_TYPES, FOCAL_MAX_RADIUS, CHAT_MAX_CHARS, ECHO_MAX_CHARS, TEXT_FIELDS, DELAY_MAX_SEC, FOUND_MAX_CHARS } from "./protocol.js";
 
 const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 
@@ -91,6 +91,24 @@ function checkPlain(d, notes, ctx = {}) {
     const t = longest(d.text);
     if (!t.trim()) errs.push("diary_echo without text");
     else if (t.length > ECHO_MAX_CHARS) errs.push(`diary_echo longer than ${ECHO_MAX_CHARS}`);
+  }
+  // a piece's `found` line (over the finder's head) is a nicety: one that is incomplete or long is
+  // dropped, never the piece (the mod then says its own plain line)
+  if (d.found !== undefined) {
+    const miss = missingLanguages(d.found, ctx.languages);
+    const t = isObj(d.found) || typeof d.found === "string" ? longest(d.found) : "";
+    if (!t.trim() || miss.length || t.length > FOUND_MAX_CHARS) {
+      notes.push(`${d.id}: found line dropped (${!t.trim() ? "empty" : miss.length ? `lacks ${miss.join(", ")}` : `longer than ${FOUND_MAX_CHARS}`})`);
+      delete d.found;
+    }
+  }
+  // where a piece rests is a story choice; a malformed one falls back to the mod's own (never a bin)
+  if (isObj(d.target) && d.target.container_pref !== undefined) {
+    const p = d.target.container_pref;
+    if (!Array.isArray(p) || !p.length || !p.every((x) => typeof x === "string" && /^[a-z]{2,24}$/.test(x))) {
+      notes.push(`${d.id}: container_pref dropped (a list of container kinds, e.g. ["desk", "wardrobe"])`);
+      delete d.target.container_pref;
+    }
   }
   for (const f of TEXT_FIELDS) {
     if (d[f] === undefined || d[f] === null || d[f] === "") continue;

@@ -32,6 +32,7 @@ import { tier } from "./difficulty.js";
 import { BRIDGE_ONLY_TYPES } from "./protocol.js";
 import { stepsDue, stepOf, cycleOf } from "./pacing.js";
 import { chapterEndTexts } from "./chapterend.js";
+import { leftBehindText, chooseThread, threadFor, nextThread } from "./threads.js";
 import { notePages, noteFaded, readContributions, planExtras, checkExtraChapter, scoreMin } from "./contribution.js";
 import { blockMaterial, bodyOnly, fillPull, gateWatch, townNames, WATCH_MAX_PER_CALL, WATCH_MAX_CALLS } from "./watch.js";
 import { adviceFor, hintRecord, memoryFrom, remember } from "./anchors.js";
@@ -803,7 +804,8 @@ export function makeDecide(deps) {
               place: axisNode.place ?? axisNode.location_fn ?? null, what_happened: axisNode.what_happened ?? null,
               piece: (axisNode.pieces || []).map((p) => ({ item: p.item, shows: p.shows ?? null }))[0] || null,
               ...(where ? { where } : {}) } },
-          state: { node: axisNode.id, languages: state.languages || ["en"], ...(place ? { pull_wanted: true } : {}) },
+          state: { node: axisNode.id, languages: state.languages || ["en"], ...(place ? { pull_wanted: true } : {}),
+            ...(threadFor(state.thread, state.season || "") ? { thread: threadFor(state.thread, state.season || "") } : {}) },
           stall: { step: steps ? stepOf(steps) : 0, cycle: steps ? cycleOf(steps) : 0, played_days: (pacing.days || []).length },
           // no direction or distance per player (Teko, 2026-11-13): the hint is read later, somewhere
           // else; its pull is written per band and chosen by the mod when it writes (src/watch.js)
@@ -1192,7 +1194,10 @@ export function makeDecide(deps) {
             ...(state.ashes && !state.ashes.used ? { ashes_scattered_at: state.ashes } : {}),
             // the finders' chapter pages to score (their text is in motifs), docs/13 item 5
             ...(pagesOpen.length ? { pages_to_score: pagesOpen.map((p) => ({ motif: p.id, player: p.player, chapter: p.chapter })),
-              extra_chapter_score: minScore, extra_chapter_host: host } : {}) },
+              extra_chapter_score: minScore, extra_chapter_host: host } : {}),
+            // a strong page of an earlier chapter, carried into this stage (src/threads.js)
+            ...(kind !== "seed" && state.thread?.set_in !== writeNode && threadFor(state.thread, seasonNow)
+              ? { thread: threadFor(state.thread, seasonNow) } : {}) },
           ledger, events: events.filter((e) => e.type !== "player_journey").slice(-40), journeys, motifs: unused,
           catalog: { ...worldSlice(index), places, clue_items: clueItems(color), rewards, containers_opened: opened },
           rejections: round === 1 ? [...failureNote(state, kind), ...rejections] : rejections, stage: writeStage, stall: null,
@@ -1430,6 +1435,14 @@ export function makeDecide(deps) {
       const endNode = (bible?.axis || []).find((n) => n.id === endId);
       const endTexts = chapterEndTexts(answer?.chapter_end, state.languages || ["en"], endNode?.ending ? [] : bible?.forbidden_entities || []);
       if (answer?.chapter_end && !endTexts.record && !endTexts.echo) notes.push(`chapter_end of ${endId}: incomplete, the bridge's lines will do`);
+      // the line for who opens this chapter's container and leaves the piece (src/threads.js)
+      const leftText = leftBehindText(answer?.left_behind, state.languages || ["en"], endNode?.ending ? [] : bible?.forbidden_entities || []);
+      if (answer?.left_behind && !leftText) notes.push(`left_behind of ${endId}: unusable, the bridge's line will do`);
+      const leftTexts = { ...(kind === "seed" ? {} : state.left_behind_texts || {}), ...(endNode && leftText ? { [endId]: leftText } : {}) };
+      // the strongest page scored in this call becomes the thread the next calls carry
+      const chosen = chooseThread(readContributions(answer?.contribution, pagesOpen), unused, state.thread?.player, writeNode);
+      if (chosen) notes.push(`thread: ${chosen.player}'s page of ${chosen.chapter} (${chosen.score}) is carried on`);
+      const thread = nextThread(state.thread, chosen ? { ...chosen, season: seasonNow } : null, writeNode, kind === "seed");
       const chapterEnds = { ...(kind === "seed" ? {} : state.chapter_end_texts || {}),
         ...(endNode ? { [endId]: { ...endTexts, title: endNode.chapter_title || endNode.title || null } } : {}) };
       if (kind === "seed") {
@@ -1484,6 +1497,8 @@ export function makeDecide(deps) {
         urn_history: urn ? [...(state.urn_history || []), urn.id] : state.urn_history || [],
         creativity: nextCreativity(state.creativity, answer?.creativity_score),
         chapter_end_texts: chapterEnds,
+        left_behind_texts: leftTexts,
+        thread,
         rings_pending: { ...(kind === "seed" ? {} : state.rings_pending || {}), ...(ringsLater ? { [ringsLater.node]: ringsLater } : {}) },
         // the extras of this story per node, how each closed chapter's were decided, the extra
         // chapters opened, and the season's tally (the Final Tale's)

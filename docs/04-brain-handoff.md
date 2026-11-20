@@ -254,6 +254,7 @@ and `stall.step` (0-4). Per player, one `diary_entry` or nothing:
 facts: objects, numbers, colours, sounds, gestures) not in `avoid_anchors`; vary the sense. No
 `worn_words`, no tics ("X says I'm tired", "day N"). Reread and fix each: one image, natural
 grammar per language. Refused: avoided anchor, two worn words.
+With `state.thread` in a watch task, a hint may lean on it the same way: transformed, never quoted, no name.
 Answer only `{ "directives": [ { "type": "diary_entry", "player", "kind": "hint" | "record", "anchor": {lang: word}, "text": {lang: text}, "pull": { "near", "town", "far" } } ] }`, `text` at most 400 characters each; the whole answer under 6000 characters.
 
 ## The rings, from the real building (task `clues`, Teko 2026-10-23)
@@ -429,6 +430,15 @@ sent back to you, and every round costs the server owner money. Follow the shape
   before the end.
 - **Where**: `target.building` is always an `id` from `catalog.places` (e.g. `"b_10931_6715"`),
   never a description. A focal action (placing, writing, a door) has `target.radius` 3 or less.
+- **Resting place**: where a piece lies is part of its story, never an arbitrary pick. Put it
+  where this object would really have ended up, given who had it, what it meant to them and
+  what happened; find those reasons yourself. `target.container_pref` lists container kinds in
+  order of preference (game names: desk, drawer, wardrobe, counter, fridge, shelves, bin, …),
+  or set `"on_floor": true`. Any kind is allowed when the story makes it the right place.
+  Unset, the game uses any container except a bin. Each piece also has `found`: the finder's
+  thought on seeing it where it lies, shown over their head before pickup. At most 90
+  characters, in every language of `state.languages`. It answers the place and the moment,
+  never what the piece says.
 - **Items**: the story's own pieces are from `catalog.clue_items` (e.g. `ZTales.NoteYellow`);
   any other item must be one of `catalog.rewards`.
 - **Every text a player reads** (`text`, `title`, `prompt`, `epilogue`, `server_line`, hint
@@ -444,6 +454,8 @@ sent back to you, and every round costs the server owner money. Follow the shape
   "way_back": "<next axis node>" }` (question at most 400 characters, text 1500). One piece, from `catalog.places`, never where a piece is; it
   never blocks the story and the urn takes it as an extra. The bridge writes its id.
 - **`chapter_end`** (top level, every node but the last): `{ "record": {lang: text}, "echo": {lang: text} }`, at most 400 characters each, diary lines in the first person for the players who did not find the piece: `record` for those near or who took part (they felt it happen), `echo` for those far away (word of it reached them). Never what the piece says.
+- **`left_behind`** (top level, every node but the last): `{lang: text}`, every language of `state.languages`, at most 300 characters each. A first-person diary line, delivered hours later in a quiet moment to a player who opened this chapter's container and left without the piece. A memory that will not settle, grown from this place and this piece; it draws them back without naming the piece, where it lies, or anything missed. Never what the piece says.
+- **`state.thread`** (some stage tasks): `{ player, chapter, text }`, a chapter page you scored 2 or more. Carry its suspicion into this stage: let it surface transformed in what the stage places and says, so its writer recognises their own idea grown into the story. It bends what is told, never what is true: axis, ending, pieces' order and bible stand. Name nobody.
 - **The stage you write is covered**: for the node being opened, one reaction per piece
   (`when.story_id` = that piece), one closing reaction
   `{ "when": { "event": "node_changed", "from": "n1" } }`, and one for each stall step
@@ -466,7 +478,8 @@ A minimal `seed` answer (task `stage` is the same without `bible`; task `bible` 
     "finale": { "rooms_wanted": ["church", "office"], "urn": { "title": { "en": "...", "pt-br": "..." } }, "weather": "storm" } },
   "directives": [
     { "id": "s1_note", "type": "write_note", "story_id": "n1_note", "item": "ZTales.NoteYellow",
-      "target": { "building": "b_10931_6715" }, "title": { "en": "...", "pt-br": "..." }, "text": { "en": "...", "pt-br": "..." } },
+      "target": { "building": "b_10931_6715", "container_pref": ["desk", "drawer"] }, "title": { "en": "...", "pt-br": "..." }, "text": { "en": "...", "pt-br": "..." },
+      "found": { "en": "...", "pt-br": "..." } },
     { "id": "r_n1_note", "type": "reaction", "stage": "n1", "once": "server",
       "when": { "event": "item_picked", "story_id": "n1_note" },
       "then": [ { "id": "r_n1_note.1", "type": "chat", "scope": "player", "player": "$player", "text": { "en": "...", "pt-br": "..." } },
@@ -499,7 +512,7 @@ a live run lost three stages to them):
 4. The four stall steps (`signal` stall 1 to 4).
 5. Every text in every language of `state.languages`.
 6. The diary entry after a find: what was found, a reflection, a veiled pointer to the next clue.
-7. `chapter_end` (`record` and `echo`), every node but the last.
+7. `chapter_end` (`record` and `echo`) and `left_behind`, every node but the last.
 
 ## Output format
 
