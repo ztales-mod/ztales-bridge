@@ -212,3 +212,26 @@ test("watch gate: the player's own town written apart (West Point) is the region
   assert.equal(hintPlaceErrors(mixed, place, ["WestPoint"]).length, 1, "still one sentence mixing the day and the sign");
   assert.equal(hintPlaceErrors("Something in Muldraugh pulls at me.", place, ["WestPoint"]).length, 1, "another town is still refused");
 });
+
+test("the place gate: where they were, joined to a search, is refused; a plain report is not (production 2026-11-22)", async () => {
+  const { hintPlaceErrors } = await import("../src/watch.js");
+  const place = { region: "West Point", towns: ["West Point", "Rosewood"], signs: [] };
+  const chase = hintPlaceErrors("Whatever I was chasing in Rosewood keeps sliding off me.", place, ["Rosewood"]);
+  assert.ok(chase.some((e) => e.includes("Rosewood") && e.includes("chasing")), chase.join("; "));
+  const pt = hintPlaceErrors("Seja lá o que eu perseguia em Rosewood continua escorregando de mim.", place, ["Rosewood"]);
+  assert.equal(pt.length, 1, pt.join("; "));
+  assert.deepEqual(hintPlaceErrors("I walked through Rosewood and back before dark.", place, ["Rosewood"]), []);
+});
+
+test("the block: only the last day's towns and places reach the AI; older days keep what they did", () => {
+  const ev = (o) => ({ type: "player_journey", player: "ana", ts: "2033-01-01T00:00:00Z", walked_tiles: 10, ...o });
+  const t = Date.parse("2033-01-01T00:00:00Z") / 1000;
+  const m = blockMaterial([ev({ regions: ["Rosewood", "Muldraugh"], named_places: ["Rosewood Fire Station"] }),
+    ev({ regions: ["WestPoint"], named_places: [] })], { player: "ana", from: t - 3600, to: t + 3600 });
+  assert.deepEqual(m.regions, ["WestPoint"]);
+  assert.deepEqual(m.places, []);
+  assert.equal(m.journeys.length, 2);
+  assert.equal(m.journeys[0].regions, undefined);
+  assert.equal(m.journeys[0].walked_tiles, 10);
+  assert.deepEqual(m.journeys[1].regions, ["WestPoint"]);
+});

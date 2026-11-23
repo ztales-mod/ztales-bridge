@@ -127,8 +127,6 @@ const inBlock = (e, from, to) => {
 export function blockMaterial(events, { player, from, to }) {
   const journeys = [];
   const diary = [];
-  const places = new Set();
-  const regions = new Set();
   let where = null;
   for (const e of events || []) {
     if (!e || e.player !== player || !inBlock(e, from, to)) continue;
@@ -138,14 +136,21 @@ export function blockMaterial(events, { player, from, to }) {
       journeys.push({ from: e.from, to: e.to, online_minutes: e.online_minutes, regions: e.regions, named_places: e.named_places,
         walked_tiles: e.walked_tiles, driven_tiles: e.driven_tiles, zombies_killed: e.zombies_killed, companions: e.companions,
         died: e.died, moods: e.moods, moods_end: e.moods_end, profession: e.profession, char: e.char });
-      for (const p of Array.isArray(e.named_places) ? e.named_places : []) places.add(String(p));
-      for (const r of Array.isArray(e.regions) ? e.regions : []) regions.add(String(r));
     } else if (e.type === "journal" && typeof e.text === "string" && e.text.trim()) {
       diary.push({ kind: e.kind ?? null, chapter: e.chapter ?? null, text: e.text.slice(0, 1200) });
     }
   }
-  return { player, hours: Math.round(((to - from) / 3600) * 10) / 10, journeys: journeys.slice(-12), diary: diary.slice(-6),
-    places: [...places].slice(0, 30), regions: [...regions].slice(0, 12), ...(where ? { where } : {}) };
+  // Only the last day's towns and places (production 2026-11-22: a block that had passed through
+  // Rosewood the day before got "whatever I was chasing in Rosewood", the piece in West Point, where
+  // the player was). Older days keep what they did, not where.
+  const kept = journeys.slice(-12);
+  const last = kept[kept.length - 1];
+  const list = (v, n) => [...new Set((Array.isArray(v) ? v : []).map(String))].slice(0, n);
+  const regions = list(last?.regions, 12);
+  const places = list(last?.named_places, 30);
+  const shown = kept.map((j) => (j === last ? j : { ...j, regions: undefined, named_places: undefined }));
+  return { player, hours: Math.round(((to - from) / 3600) * 10) / 10, journeys: shown, diary: diary.slice(-6),
+    places, regions, ...(where ? { where } : {}) };
 }
 
 const shortName = (n) => String(n || "").split(",")[0].trim();
@@ -192,6 +197,9 @@ export function townNames(index, buildings = [], extra = []) {
   return [...out];
 }
 
+// a search, chase or hunt, in English and PT-BR (on normalize()d text: lower case, no accents)
+const SEEK_RE = /\b(chas\w*|search\w*|seek\w*|sought|hunt\w*|track\w*|trail\w*|looking for|look for|after it|persegu\w*|procur\w*|busc\w*|cacar|cacava|cacando|cacei|rastr\w*|atras de|atras dele|atras dela)\b/;
+
 // sentences: at . ! ? ; or a new line, never inside an ellipsis ("West Point, the bridge... starch" is one)
 const sentencesOf = (text) => String(text || "").split(/(?<!\.)[.!?](?!\.)|[;\n]/).map((x) => x.trim()).filter(Boolean);
 const holds = (norm, name) => { const n = normalize(name).trim(); return !!n && norm.includes(` ${n} `); };
@@ -221,6 +229,14 @@ export function hintPlaceErrors(text, place, own = []) {
   for (const s of sentencesOf(text)) {
     const n = strip(normalize(s));
     const area = mine.find((m) => holds(n, m) || holds(n, shortName(m)));
+    // where they were, joined to a search, reads as where it is (production 2026-11-22: "whatever I
+    // was chasing in Rosewood", the piece a few streets from them in West Point)
+    const seek = area ? SEEK_RE.exec(n) : null;
+    if (seek) {
+      errors.push(`"${s.slice(0, 80)}" puts "${shortName(area)}" (where they were) with "${seek[1]}": it reads as where the thing is. `
+        + "Name where they were only in a plain report of the day, never with a search, chase or hunt");
+      break;
+    }
     const sign = area ? signHit(n, place.signs || []) : null;
     if (sign) {
       errors.push(`"${s.slice(0, 80)}" puts "${shortName(area)}" (where they were) and "${sign}" (what is sought) in one sentence: `
